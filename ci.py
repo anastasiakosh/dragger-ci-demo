@@ -7,27 +7,30 @@ async def main():
 
     async with dagger.Connection(config) as client:
         src = client.host().directory(".")
-        
+
         print("Building the container...")
         app_container = src.docker_build()
 
         print("Running API tests...")
         try:
-            await (
-                app_container
-                .with_exec(["pytest", "tests/"])
-                .stdout()
-            )
+            await app_container.with_exec(["pytest", "tests/"]).stdout()
             print("All tests passed")
         except dagger.DaggerError:
             print("Tests failed. Build aborted.")
             sys.exit(1)
 
-        print("Publishing to local registry...")
-        image_ref = "localhost:5001/text-analyzer:v1"
+        print("Publishing to local registry via tunnel...")
+        
+        registry_tunnel = client.host().service([
+            dagger.PortForward(frontend=5001, backend=5001)
+        ])
+        
+        endpoint = await registry_tunnel.endpoint()
+        
+        image_ref = f"{endpoint}/text-analyzer:v1"
         addr = await app_container.publish(image_ref)
-
-        print(f"Pipeline complete! Image: {addr}")
+        
+        print(f"Pipeline complete! Image published to: {addr}")
 
 if __name__ == "__main__":
     try:
