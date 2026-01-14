@@ -13,7 +13,11 @@ async def main():
 
         print("Running API tests...")
         try:
-            await app_container.with_exec(["pytest", "tests/"]).stdout()
+            await (
+                app_container
+                .with_exec(["pytest", "tests/"])
+                .stdout()
+            )
             print("All tests passed")
         except dagger.DaggerError:
             print("Tests failed. Build aborted.")
@@ -21,16 +25,20 @@ async def main():
 
         print("Publishing to local registry via tunnel...")
         
-        registry_tunnel = client.host().service([
+        registry_service = client.host().service([
             dagger.PortForward(frontend=5001, backend=5001)
         ])
         
-        endpoint = await registry_tunnel.endpoint()
+        image_ref = "local-registry:5001/text-analyzer:v1"
         
-        image_ref = f"{endpoint}/text-analyzer:v1"
-        addr = await app_container.publish(image_ref)
-        
-        print(f"Pipeline complete! Image published to: {addr}")
+        addr = await (
+            app_container
+            .with_service_binding("local-registry", registry_service)
+            .publish(image_ref)
+        )
+
+        print(f"\n SUCCESS! Pipeline complete!")
+        print(f"mage published to: {addr}")
 
 if __name__ == "__main__":
     try:
